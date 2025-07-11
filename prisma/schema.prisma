@@ -13,3 +13,193 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+/// Represents a user in the system
+model User {
+  id          String        @id @default(uuid())
+  name        String
+  email       String        @unique
+  role        UserRole
+  department  Department
+  status      UserStatus
+  password    String
+  avatar      String?
+  created_at  DateTime      @default(now())
+  updated_at  DateTime      @updatedAt
+
+  // Relations
+  project_members ProjectMember[] @relation("UserProjects")
+  submissions     Submission[]    @relation("SubmittedByUser")
+  reviews         Review[]        @relation("ReviewedByUser")
+  notifications   Notification[]  @relation("ReceivedNotifications")
+}
+
+/// Represents a project in the system
+model Project {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  priority    Priority
+  status      ProjectStatus
+  startdate   DateTime
+  enddate     DateTime?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+
+  // Relations
+  project_members ProjectMember[] @relation("ProjectMembers")
+  submissions     Submission[]    @relation("ProjectSubmissions")
+}
+
+/// Represents the many-to-many relationship between users and projects
+model ProjectMember {
+  id         String   @id @default(uuid())
+  project_id String
+  user_id    String
+  joined_at  DateTime @default(now())
+
+  project Project @relation("ProjectMembers", fields: [project_id], references: [id])
+  user    User    @relation("UserProjects", fields: [user_id], references: [id])
+
+  @@unique([project_id, user_id]) // Prevent duplicate memberships
+  @@index([project_id]) // Optimize queries by project_id
+}
+
+/// Represents a submission for a project
+model Submission {
+  id           String     @id @default(uuid())
+  project_id   String
+  submitted_by String
+  description  String?
+  status       SubmissionStatus
+  start_date   DateTime
+  end_date     DateTime?
+  created_at   DateTime   @default(now())
+
+  project    Project    @relation("ProjectSubmissions", fields: [project_id], references: [id])
+  submitter  User       @relation("SubmittedByUser", fields: [submitted_by], references: [id])
+  reviews    Review[]   @relation("SubmissionReviews")
+  timelogs   Timelog[]  @relation("SubmissionTimelogs")
+}
+
+/// Represents a review of a submission
+model Review {
+  id               String     @id @default(uuid())
+  submission_id    String
+  reviewed_by      String
+  feedback         String?
+  review_date      DateTime
+  status           DecisionStatus
+
+  submission Submission @relation("SubmissionReviews", fields: [submission_id], references: [id])
+  reviewer   User       @relation("ReviewedByUser", fields: [reviewed_by], references: [id])
+
+  @@index([submission_id]) // Optimize queries by submission_id
+}
+
+/// Represents a timelog entry for a submission
+model Timelog {
+  id             String     @id @default(uuid())
+  submission_id  String
+  task_name      String
+  work_date      DateTime
+  duration       Float
+  log_note       String?
+  status         TimelogStatus
+
+  submission Submission @relation("SubmissionTimelogs", fields: [submission_id], references: [id])
+
+  @@index([submission_id]) // Optimize queries by submission_id
+}
+
+/// Represents a notification sent to a user
+model Notification {
+  id                 String     @id @default(uuid())
+  recipient_id       String
+  notification_type  NotificationType
+  title              String
+  message            String
+  reference_table    String?
+  reference_id       String?
+  is_read            Boolean   @default(false)
+  priority           Priority
+  action_url         String?
+  created_at         DateTime  @default(now())
+
+  recipient User @relation("ReceivedNotifications", fields: [recipient_id], references: [id])
+}
+
+/// Represents an activity log for tracking actions in the system
+model ActivityLog {
+  id             String     @id @default(uuid())
+  action_type    ActionType
+  action_data    Json?
+  target_type    String
+  target_id      String
+  created_at     DateTime   @default(now())
+
+  @@index([target_type, target_id]) // Optimize queries by target
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum Department {
+  ENGINEERING
+  HR
+  MARKETING
+  FINANCE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ProjectStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  ARCHIVED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DecisionStatus {
+  APPROVED
+  REJECTED
+  NEEDS_CHANGES
+}
+
+enum TimelogStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+}
+
+enum NotificationType {
+  MESSAGE
+  ALERT
+  ASSIGNMENT
+}
+
+enum ActionType {
+  CREATE
+  UPDATE
+  DELETE
+}
